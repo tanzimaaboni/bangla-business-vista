@@ -24,3 +24,9 @@ export interface AuthState {
   isAuthenticated: boolean;
   isAdmin: boolean;
 }
+
+export interface PaginationOptions {
+  currentPage: number;
+  totalPages: number;
+  pageSize: number;
+}

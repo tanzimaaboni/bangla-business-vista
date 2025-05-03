@@ -1,5 +1,4 @@
-
-import { Company, User } from "@/types";
+import { Company, User, PaginationOptions } from "@/types";
 
 // Mock company data
 const mockCompanies: Company[] = [
@@ -141,17 +140,29 @@ const generateToken = (user: User): string => {
 
 // Service functions to simulate API calls
 export const companiesApi = {
-  // Get all companies
-  getAll: async (): Promise<Company[]> => {
+  // Get all companies with pagination
+  getAll: async (page: number = 1, pageSize: number = 5): Promise<{data: Company[], pagination: PaginationOptions}> => {
     return new Promise((resolve) => {
       setTimeout(() => {
-        resolve([...companies]);
+        const startIndex = (page - 1) * pageSize;
+        const endIndex = startIndex + pageSize;
+        const paginatedData = companies.slice(startIndex, endIndex);
+        const totalPages = Math.ceil(companies.length / pageSize);
+        
+        resolve({
+          data: [...paginatedData], 
+          pagination: {
+            currentPage: page,
+            totalPages: totalPages,
+            pageSize: pageSize
+          }
+        });
       }, 300);
     });
   },
 
-  // Search companies
-  search: async (query: string): Promise<Company[]> => {
+  // Search companies with pagination
+  search: async (query: string, page: number = 1, pageSize: number = 5): Promise<{data: Company[], pagination: PaginationOptions}> => {
     return new Promise((resolve) => {
       setTimeout(() => {
         const filtered = companies.filter(
@@ -159,7 +170,20 @@ export const companiesApi = {
             company.name.toLowerCase().includes(query.toLowerCase()) ||
             company.sector.toLowerCase().includes(query.toLowerCase())
         );
-        resolve(filtered);
+        
+        const startIndex = (page - 1) * pageSize;
+        const endIndex = startIndex + pageSize;
+        const paginatedData = filtered.slice(startIndex, endIndex);
+        const totalPages = Math.ceil(filtered.length / pageSize);
+        
+        resolve({
+          data: paginatedData,
+          pagination: {
+            currentPage: page,
+            totalPages: totalPages,
+            pageSize: pageSize
+          }
+        });
       }, 300);
     });
   },

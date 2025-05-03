@@ -1,6 +1,5 @@
-
 import { useState, useEffect } from "react";
-import { Company } from "@/types";
+import { Company, PaginationOptions } from "@/types";
 import { companiesApi } from "@/services/api";
 import { CompanyCard } from "@/components/CompanyCard";
 import { SearchBar } from "@/components/SearchBar";
@@ -11,6 +10,17 @@ import { useToast } from "@/components/ui/use-toast";
 import { PlusCircle } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
+import { 
+  Pagination, 
+  PaginationContent, 
+  PaginationItem, 
+  PaginationLink, 
+  PaginationNext, 
+  PaginationPrevious,
+  PaginationEllipsis
+} from "@/components/ui/pagination";
+
+const PAGE_SIZE = 5; // Number of companies per page
 
 const AdminPage = () => {
   const [companies, setCompanies] = useState<Company[]>([]);
@@ -21,6 +31,12 @@ const AdminPage = () => {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [selectedCompany, setSelectedCompany] = useState<Company | undefined>(undefined);
   const [companyToDelete, setCompanyToDelete] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [pagination, setPagination] = useState<PaginationOptions>({
+    currentPage: 1,
+    totalPages: 1,
+    pageSize: PAGE_SIZE
+  });
   const { toast } = useToast();
   const { isAuthenticated, isAdmin } = useAuth();
   const navigate = useNavigate();
@@ -32,14 +48,21 @@ const AdminPage = () => {
     }
     
     fetchCompanies();
-  }, [isAuthenticated, isAdmin, navigate]);
+  }, [isAuthenticated, isAdmin, navigate, pagination.currentPage]);
 
   const fetchCompanies = async () => {
     try {
       setLoading(true);
-      const data = await companiesApi.getAll();
-      setCompanies(data);
-      setFilteredCompanies(data);
+      if (searchQuery) {
+        const result = await companiesApi.search(searchQuery, pagination.currentPage, pagination.pageSize);
+        setFilteredCompanies(result.data);
+        setPagination(result.pagination);
+      } else {
+        const result = await companiesApi.getAll(pagination.currentPage, pagination.pageSize);
+        setCompanies(result.data);
+        setFilteredCompanies(result.data);
+        setPagination(result.pagination);
+      }
     } catch (error) {
       console.error("Error fetching companies:", error);
       toast({
@@ -53,14 +76,12 @@ const AdminPage = () => {
   };
 
   const handleSearch = async (query: string) => {
-    if (!query.trim()) {
-      setFilteredCompanies(companies);
-      return;
-    }
+    setSearchQuery(query);
     
     try {
-      const results = await companiesApi.search(query);
-      setFilteredCompanies(results);
+      const result = await companiesApi.search(query, 1, pagination.pageSize);
+      setFilteredCompanies(result.data);
+      setPagination(result.pagination);
     } catch (error) {
       console.error("Search error:", error);
       toast({
@@ -69,6 +90,10 @@ const AdminPage = () => {
         variant: "destructive"
       });
     }
+  };
+
+  const handlePageChange = (page: number) => {
+    setPagination(prev => ({ ...prev, currentPage: page }));
   };
 
   const handleAddCompany = async (company: Omit<Company, "id">) => {
@@ -158,7 +183,60 @@ const AdminPage = () => {
     setIsDeleteDialogOpen(true);
   };
 
-  if (loading) {
+  const renderPagination = () => {
+    const { currentPage, totalPages } = pagination;
+    
+    if (totalPages <= 1) return null;
+    
+    return (
+      <Pagination className="mt-8">
+        <PaginationContent>
+          {currentPage > 1 && (
+            <PaginationItem>
+              <PaginationPrevious onClick={() => handlePageChange(currentPage - 1)} />
+            </PaginationItem>
+          )}
+          
+          {[...Array(totalPages)].map((_, i) => {
+            const pageNum = i + 1;
+            
+            // Show first page, last page, and pages around current page
+            if (
+              pageNum === 1 ||
+              pageNum === totalPages ||
+              (pageNum >= currentPage - 1 && pageNum <= currentPage + 1)
+            ) {
+              return (
+                <PaginationItem key={pageNum}>
+                  <PaginationLink
+                    isActive={pageNum === currentPage}
+                    onClick={() => handlePageChange(pageNum)}
+                  >
+                    {pageNum}
+                  </PaginationLink>
+                </PaginationItem>
+              );
+            }
+            
+            // Show ellipsis for breaks in page numbers
+            if (pageNum === currentPage - 2 || pageNum === currentPage + 2) {
+              return <PaginationItem key={`ellipsis-${pageNum}`}><PaginationEllipsis /></PaginationItem>;
+            }
+            
+            return null;
+          })}
+          
+          {currentPage < totalPages && (
+            <PaginationItem>
+              <PaginationNext onClick={() => handlePageChange(currentPage + 1)} />
+            </PaginationItem>
+          )}
+        </PaginationContent>
+      </Pagination>
+    );
+  };
+
+  if (loading && pagination.currentPage === 1) {
     return (
       <div className="container mx-auto px-4 py-8">
         <div className="text-center">
@@ -209,6 +287,9 @@ const AdminPage = () => {
           ))
         )}
       </div>
+      
+      {/* Pagination controls */}
+      {renderPagination()}
       
       {/* Add Company Dialog */}
       <CompanyForm
